@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今天午餐吃什麼？</title>
+    <!-- 引入 Confetti 紙片特效的套件 -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        /* 基礎排版與色彩設定 */
+        body {
+            font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif;
+            background-color: #FFF3E0; /* 溫暖的橘黃底色，刺激食慾 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 {
+            color: #E65100;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        /* 轉盤區塊 */
+        .wheel-container {
+            position: relative;
+            width: 320px;
+            height: 320px;
+            margin: 20px auto;
+            border-radius: 50%;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            background-color: #fff;
+            border: 8px solid #FFCC80;
+        }
+
+        /* 轉盤上方的指標 (倒三角形) */
+        .pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 30px solid #D84315; /* 深橘紅色 */
+            z-index: 10;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.2));
+        }
+
+        #wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            /* 旋轉動畫的設定 */
+            transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        /* 控制區塊 (按鈕與輸入框) */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            width: 100%;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #FFCC80;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #FB8C00;
+        }
+
+        /* 按鈕樣式 */
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .btn-spin {
+            background-color: #FF9800;
+            color: white;
+            font-size: 20px;
+            padding: 15px 40px;
+            border-radius: 30px;
+            box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);
+        }
+        
+        .btn-spin:hover { background-color: #F57C00; }
+        
+        .btn-add { background-color: #4CAF50; color: white; }
+        .btn-add:hover { background-color: #388E3C; }
+        
+        .btn-reset { background-color: #9E9E9E; color: white; width: 100%; }
+        .btn-reset:hover { background-color: #757575; }
+
+        /* 結果跳出視窗 (Modal) */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 16px;
+            text-align: center;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-title { font-size: 24px; color: #555; margin-bottom: 10px; }
+        .modal-result { font-size: 40px; color: #E65100; font-weight: bold; margin: 20px 0; }
+        .btn-close { background-color: #FF9800; color: white; }
+
+    </style>
+</head>
+<body>
+
+    <h1>今天午餐吃什麼？😋</h1>
+
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="400" height="400"></canvas>
+    </div>
+
+    <button id="spinBtn" class="btn-spin">開始抽籤！</button>
+
+    <div class="controls">
+        <div class="input-group">
+            <input type="text" id="newOption" placeholder="輸入想吃的食物...">
+            <button id="addBtn" class="btn-add">新增</button>
+        </div>
+        <button id="resetBtn" class="btn-reset">還原預設選項</button>
+    </div>
+
+    <!-- 中獎結果提示框 -->
+    <div id="resultModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title">命運的安排是：</div>
+            <div class="modal-result" id="resultText">滷肉飯</div>
+            <button id="closeModalBtn" class="btn-close">確定</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const defaultOptions = ["滷肉飯", "義大利麵", "麥當勞", "拉麵", "健康餐盒", "自助餐"];
+        let options = [...defaultOptions];
+        
+        // 柔和且好看的顏色盤
+        const colors = ['#FF9AA2', '#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#C7CEEA', '#F1CBFF', '#BFFFF0'];
+        
+        let currentDeg = 0;
+        let isSpinning = false;
+
+        // 繪製轉盤的函數
+        function drawWheel() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const arc = 2 * Math.PI / options.length;
+            
+            ctx.save();
+            // 將畫布中心移到正中央
+            ctx.translate(200, 200);
+            // 旋轉 -90 度，讓第一塊扇形的起點位於正上方 (12點鐘方向)
+            ctx.rotate(-Math.PI / 2); 
+
+            for(let i = 0; i < options.length; i++) {
+                // 畫扇形
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, 200, i * arc, (i + 1) * arc);
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 畫文字
+                ctx.save();
+                // 將畫筆旋轉到扇形的中間角度
+                ctx.rotate(i * arc + arc / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 22px 微軟正黑體';
+                // 調整文字位置 (170 代表距離圓心多遠)
+                ctx.fillText(options[i], 170, 8);
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        // 點擊旋轉按鈕
+        document.getElementById('spinBtn').addEventListener('click', () => {
+            if(isSpinning || options.length === 0) return;
+            isSpinning = true;
+
+            // 至少轉 5 圈 (360*5)，加上隨機角度
+            const spinDegrees = (360 * 5) + Math.floor(Math.random() * 360);
+            currentDeg += spinDegrees;
+
+            // 觸發 CSS 旋轉動畫
+            canvas.style.transform = `rotate(${currentDeg}deg)`;
+
+            // 等待動畫結束 (4秒) 後顯示結果
+            setTimeout(() => {
+                isSpinning = false;
+                
+                // 計算中獎項目
+                // 因為我們順時針旋轉，轉盤上方固定的指標對應的角度為： 360 - (轉動總角度 % 360)
+                const actualDeg = currentDeg % 360;
+                const pointerDeg = (360 - actualDeg) % 360;
+                
+                // 每個選項佔的角度
+                const sliceDeg = 360 / options.length;
+                const winningIndex = Math.floor(pointerDeg / sliceDeg);
+                
+                const winner = options[winningIndex];
+                
+                // 顯示結果
+                document.getElementById('resultText').innerText = winner;
+                document.getElementById('resultModal').classList.add('active');
+                
+                // 發射紙片特效
+                confetti({
+                    particleCount: 150,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#FF9800', '#4CAF50', '#F44336', '#2196F3']
+                });
+
+            }, 4000); // 4000 毫秒與 CSS 的 transition 時間一致
+        });
+
+        // 關閉 Modal
+        document.getElementById('closeModalBtn').addEventListener('click', () => {
+            document.getElementById('resultModal').classList.remove('active');
+        });
+
+        // 新增選項
+        document.getElementById('addBtn').addEventListener('click', () => {
+            const input = document.getElementById('newOption');
+            const value = input.value.trim();
+            if(value) {
+                options.push(value);
+                input.value = '';
+                drawWheel();
+            }
+        });
+
+        // 允許按 Enter 鍵新增
+        document.getElementById('newOption').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') {
+                document.getElementById('addBtn').click();
+            }
+        });
+
+        // 還原預設選項
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            options = [...defaultOptions];
+            drawWheel();
+            // 重置旋轉角度
+            currentDeg = 0;
+            canvas.style.transition = 'none'; // 取消動畫
+            canvas.style.transform = `rotate(0deg)`;
+            // 強制瀏覽器重繪，為了下次旋轉時恢復動畫
+            setTimeout(() => {
+                canvas.style.transition = 'transform 4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+            }, 10);
+        });
+
+        // 初始繪製
+        drawWheel();
+
+    </script>
+</body>
+</html>
